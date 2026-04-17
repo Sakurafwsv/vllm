@@ -389,17 +389,16 @@ class Scheduler(SchedulerInterface):
 
         # First, schedule the RUNNING requests.
         req_index = 0
+        enable_pp_limit = (
+            not envs.VLLM_USE_RAY_V2_EXECUTOR_BACKEND
+            and self.pipeline_parallel_size > 1
+        )
         while req_index < len(self.running) and token_budget > 0:
-            if (
-                not envs.VLLM_USE_RAY_V2_EXECUTOR_BACKEND
-                and self.pipeline_parallel_size > 1
-            ):
+            if enable_pp_limit:
                 current_stage_capacity = (
                     len(self.running) + self.pipeline_parallel_size - 1
                 ) // self.pipeline_parallel_size
-                if len(scheduled_running_reqs) >= min(
-                    self.max_num_pre_pipeline_reqs, current_stage_capacity
-                ):
+                if len(scheduled_running_reqs) >= current_stage_capacity:
                     break
             request = self.running[req_index]
 
@@ -583,10 +582,7 @@ class Scheduler(SchedulerInterface):
             step_skipped_waiting = create_request_queue(self.policy)
 
             while (self.waiting or self.skipped_waiting) and token_budget > 0:
-                if (
-                    not envs.VLLM_USE_RAY_V2_EXECUTOR_BACKEND
-                    and self.pipeline_parallel_size > 1
-                ):
+                if enable_pp_limit:
                     reqs_num_pre_pipeline = (
                         len(scheduled_new_reqs)
                         + len(scheduled_running_reqs)
